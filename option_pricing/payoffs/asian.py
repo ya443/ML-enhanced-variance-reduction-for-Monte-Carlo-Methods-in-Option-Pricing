@@ -39,7 +39,14 @@ def arithmetic_asian_payoff(S, K, r):
     -------
     (n,) discounted payoffs: e^{-rT} * (S_bar - K)^+
     """
-    return np.exp(-r * T) * np.maximum(S.mean(axis=1) - K, 0.0)
+    # Average each asset path across the monitoring dates, axis=1 means "average across time for each path".
+    avg = S.mean(axis=1)
+
+    # Call payoff: max(S_bar - K, 0).
+    payoff = np.maximum(avg - K, 0.0)
+
+    # Discount payoff back to time 0 using exp(-rT).
+    return np.exp(-r * T) * payoff
 
 
 def geometric_asian_payoff(S, K, r):
@@ -52,7 +59,15 @@ def geometric_asian_payoff(S, K, r):
     -------
     (n,) discounted geometric payoffs: e^{-rT} * (G_bar - K)^+
     """
+    # Geometric average:
+    #     G_bar = (S_1 * ... * S_ND)^(1 / ND)
+    #
+    # Computing this directly can be numerically unstable, so we use:
+    #     log(G_bar) = mean(log(S))
+    #     G_bar = exp(mean(log(S)))
     gavg = np.exp(np.mean(np.log(S), axis=1))
+
+    # Apply the call payoff to the geometric average and discount it.
     return np.exp(-r * T) * np.maximum(gavg - K, 0.0)
 
 
@@ -69,10 +84,14 @@ def geometric_asian_price(r, S0, sigma, K):
     -------
     float — exact geometric Asian call price
     """
+    # Mean of log(G_bar)
     mu_G  = np.log(S0) + (r - 0.5 * sigma**2) * TGRID.mean()
+    # Matrix with entries min(t_i, t_j)
     tt    = np.minimum.outer(TGRID, TGRID)
+    # Variance and Standard deviation of log(G_bar)
     var_G = sigma**2 / ND**2 * tt.sum()
     sig_G = np.sqrt(var_G)
+    # Black-Scholes-style d1 and d2 for the lognormal variable G_bar
     d1    = (mu_G - np.log(K) + var_G) / sig_G
     d2    = d1 - sig_G
     return np.exp(-r * T) * (
